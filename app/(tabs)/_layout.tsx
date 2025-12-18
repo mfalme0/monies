@@ -1,35 +1,26 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
+import "../global.css"
+import { Stack } from 'expo-router';
+import { FinanceProvider } from '../../context/FinanceContext';
+import { StatusBar } from 'expo-status-bar';
+import { View } from 'react-native';
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
+export default function Layout() {
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
-        }}
-      />
-    </Tabs>
+    <FinanceProvider>
+      {/* 1. Force black background on the absolute root */}
+      <View style={{ flex: 1, backgroundColor: '#000000' }}> 
+        <StatusBar style="light" backgroundColor="#000000" />
+        
+        <Stack screenOptions={{ 
+          headerShown: false,
+          // 2. Ensure the content area is also black
+          contentStyle: { backgroundColor: '#000000' }, 
+          animation: 'slide_from_right'
+        }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="add" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        </Stack>
+      </View>
+    </FinanceProvider>
   );
 }
