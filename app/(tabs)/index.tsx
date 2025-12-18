@@ -188,6 +188,7 @@ const { rate, income, expenses } = calculateBurnRate();
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => setRefreshing(false)} tintColor="#007AFF" />}
       >
         
+        
         {/* Header */}
         <View className="px-6 pt-16 pb-8 flex-row justify-between items-center">
           <View>

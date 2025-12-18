@@ -20,7 +20,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.monies"
+      "package": "com.mfalme0.monies",
+      "permissions": ["READ_SMS"],
     },
     "web": {
       "output": "static",
@@ -39,7 +40,17 @@
             "backgroundColor": "#000000"
           }
         }
+        
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
       ]
+
     ],
     "experiments": {
       "typedRoutes": true,

@@ -28,52 +28,23 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     loadData();
   }, []);
 
- // Inside src/context/FinanceContext.tsx
-
   const loadData = async () => {
     try {
       const [txs, accts, lns, bills, sec, onboardStatus, user, week] = await Promise.all([
         storage.get<Transaction[]>('transactions'),
         storage.get<Account[]>('accounts'),
         storage.get<Loan[]>('loans'),
-        storage.get<Bill[]>('recurringBills'),
+        storage.get<Bill[]>('recurringBills'), // <--- Load Bills
         storage.get<boolean>('security'),
         storage.get<boolean>('isOnboarded'),
         storage.get<string>('username'),
         storage.get<string>('payWeek')
       ]);
 
-      // --- THE FIX: SANITIZE DATA ON LOAD ---
-      
-      // 1. Clean Bills: Ensure amount is a Number
-      if (bills) {
-        const cleanBills = bills.map(b => ({
-          ...b,
-          amount: parseFloat(b.amount as any) || 0 // Force convert string to number
-        }));
-        setRecurringBills(cleanBills);
-      }
-
-      // 2. Clean Accounts: Ensure balance is a Number
-      if (accts) {
-        const cleanAccounts = accts.map(a => ({
-          ...a,
-          balance: parseFloat(a.balance as any) || 0
-        }));
-        setAccounts(cleanAccounts);
-      }
-
-      // 3. Clean Loans
-      if (lns) {
-        const cleanLoans = lns.map(l => ({
-          ...l,
-          principal: parseFloat(l.principal as any) || 0,
-          paid: parseFloat(l.paid as any) || 0
-        }));
-        setLoans(cleanLoans);
-      }
-
       if (txs) setTransactions(txs);
+      if (accts) setAccounts(accts);
+      if (lns) setLoans(lns);
+      if (bills) setRecurringBills(bills); // <--- Set Bills
       if (sec !== null) setSecurityEnabled(sec);
       if (onboardStatus === true) setIsOnboarded(true);
       if (user) setUsername(user);
@@ -152,8 +123,6 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     updateState(newAccounts, [newTx, ...transactions], newLoans);
   };
 
- // Inside FinanceContext.tsx
-
   const completeOnboarding = async (
     name: string,
     selectedBanks: string[], 
@@ -169,39 +138,23 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       type: 'bank' as const
     }));
 
-    // 2. Add Salary AND Create Transaction
-    const initialTransactions: Transaction[] = []; // <--- Create array
-
+    // 2. USE THE DATA: Apply Salary to the first account (or Cash)
     if (salary > 0) {
-      // Update Balance
       if (initialAccounts.length > 0) {
         initialAccounts[0].balance = salary;
       } else {
         initialAccounts.push({ id: 'cash', name: 'Cash', balance: salary, type: 'cash' });
       }
-
-      // Create "Salary" Transaction Record <--- THE FIX
-      initialTransactions.push({
-        id: 'init-salary',
-        type: 'in',
-        category: 'income',
-        amount: salary,
-        date: new Date().toISOString(),
-        bank: initialAccounts[0]?.name || 'Cash',
-        note: 'Initial Salary'
-      });
     }
 
-    // 3. Save to State
+    // 3. USE THE DATA: Store the bills
     setAccounts(initialAccounts);
-    setTransactions(initialTransactions); // <--- Set Transactions
     setRecurringBills(bills);
     setUsername(name);
     setPayWeek(week);
     
     // 4. Save to Storage
     await storage.set('accounts', initialAccounts);
-    await storage.set('transactions', initialTransactions); // <--- Save Transactions
     await storage.set('recurringBills', bills);
     await storage.set('username', name);
     await storage.set('payWeek', week);
@@ -229,33 +182,24 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   };
 
   // --- CALCULATION LOGIC ---
-  const totalBalance = accounts.reduce((sum, acc) => sum + (Number(acc.balance) || 0), 0);
+  const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
+  const totalDebt = loans.filter(l => !l.isSettled).reduce((sum, l) => sum + (l.principal - l.paid), 0);
   
-  const totalDebt = loans
-    .filter(l => !l.isSettled)
-    .reduce((sum, l) => sum + ((Number(l.principal) || 0) - (Number(l.paid) || 0)), 0);
+  // NEW: Calculate Monthly Bill Commitments
+  // Logic: "Safe to Spend" = Cash - (Bills I haven't paid yet this month) - Debt
+  // For simplicity: Effective = Cash - Bills - Debt
+  const totalMonthlyBills = recurringBills.reduce((sum, b) => sum + b.amount, 0);
   
-  // 2. Fix the specific bug you are seeing (Bills compounding as text)
-  const totalMonthlyBills = recurringBills.reduce((sum, b) => {
-    return sum + (Number(b.amount) || 0); // <--- The Fix: Number() wrapper
-  }, 0);
-  
-  // 3. Calculate paid bills
+  // Find which bills are already paid this month
   const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
-  
   const paidBillsAmount = transactions
-    .filter(t => {
-      const d = new Date(t.date);
-      return t.type === 'out' && 
-             d.getMonth() === currentMonth && 
-             d.getFullYear() === currentYear &&
-             ['rent', 'utilities'].includes(t.category);
-    })
-    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    .filter(t => t.type === 'out' && new Date(t.date).getMonth() === currentMonth && ['rent', 'utilities'].includes(t.category))
+    .reduce((sum, t) => sum + t.amount, 0);
 
-  // 4. Final Safe Calculations
+  // We assume the bills entered in onboarding match the 'utilities'/'rent' categories
+  // Remaining Bills = Total Bills - Amount Paid (clamped to 0)
   const remainingBills = Math.max(0, totalMonthlyBills - paidBillsAmount);
+
   const effectiveBalance = totalBalance - remainingBills - totalDebt;
 
   return (
